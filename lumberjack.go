@@ -113,6 +113,7 @@ type Logger struct {
 
 	millCh    chan bool
 	startMill sync.Once
+	maxfilesize int64
 }
 
 var (
@@ -128,29 +129,48 @@ var (
 	megabyte = 1024 * 1024
 )
 
+
+
+
+
+func NewLogger(filename string, maxsize int, maxbackups int, maxage int) *Logger {
+	l := &Logger{
+		Filename:   filename,
+		MaxSize:    maxsize,
+		MaxBackups: maxbackups,
+		MaxAge:     maxage,
+		//Compress:   true, // disabled by default
+	}
+	l.maxfilesize = l.max()
+	return l
+}
 // Write implements io.Writer.  If a write would cause the log file to be larger
 // than MaxSize, the file is closed, renamed to include a timestamp of the
 // current time, and a new log file is created using the original log file name.
 // If the length of the write is greater than MaxSize, an error is returned.
+
 func (l *Logger) Write(p []byte) (n int, err error) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	//defer l.mu.Unlock()
 
 	writeLen := int64(len(p))
-	if writeLen > l.max() {
+	if writeLen > l.maxfilesize {
+		l.mu.Unlock()
 		return 0, fmt.Errorf(
-			"write length %d exceeds maximum file size %d", writeLen, l.max(),
+			"write length %d exceeds maximum file size %d", writeLen, l.maxfilesize,
 		)
 	}
 
 	if l.file == nil {
 		if err = l.openExistingOrNew(len(p)); err != nil {
+			l.mu.Unlock()
 			return 0, err
 		}
 	}
 
-	if l.size+writeLen > l.max() {
+	if l.size+writeLen > l.maxfilesize {
 		if err := l.rotate(); err != nil {
+			l.mu.Unlock()
 			return 0, err
 		}
 	}
@@ -158,6 +178,7 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 	n, err = l.file.Write(p)
 	l.size += int64(n)
 
+	l.mu.Unlock()
 	return n, err
 }
 
