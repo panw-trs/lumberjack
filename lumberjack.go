@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"syscall"
 )
 
 const (
@@ -114,6 +115,8 @@ type Logger struct {
 	millCh    chan bool
 	startMill sync.Once
 	maxfilesize int64
+	rotateDuration int64
+	ctime time.Time
 }
 
 var (
@@ -133,16 +136,33 @@ var (
 
 
 
-func NewLogger(filename string, maxsize int, maxbackups int, maxage int) *Logger {
+func NewLogger(filename string, maxsize int, maxbackups int, maxage int, rDuration int64) *Logger {
 	l := &Logger{
 		Filename:   filename,
 		MaxSize:    maxsize,
 		MaxBackups: maxbackups,
 		MaxAge:     maxage,
+		rotateDuration: rDuration,
+		
 		//Compress:   true, // disabled by default
 	}
 	l.maxfilesize = l.max()
+	l.ctime = l.createtime()
+	
 	return l
+}
+
+
+func (l *Logger) createtime() time.Time{
+	fi, err:= os_Stat(l.file.Name())
+	if err != nil {
+		fmt.Println(err)
+		return time.Time{}
+	}
+
+	stat := fi.Sys().(*syscall.Stat_t)
+	ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+	return ctime
 }
 // Write implements io.Writer.  If a write would cause the log file to be larger
 // than MaxSize, the file is closed, renamed to include a timestamp of the
@@ -167,13 +187,22 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 			return 0, err
 		}
 	}
-
+    
 	if l.size+writeLen > l.maxfilesize {
 		if err := l.rotate(); err != nil {
 			l.mu.Unlock()
 			return 0, err
 		}
 	}
+
+	if l.ctime.Add(time.Duration(l.rotateDuration) * time.Second).After(currentTime()) {
+		if err := l.rotate(); err != nil {
+			l.mu.Unlock()
+			return 0, err
+		}
+	}
+
+	
 
 	n, err = l.file.Write(p)
 	l.size += int64(n)
@@ -259,6 +288,7 @@ func (l *Logger) openNew() error {
 	}
 	l.file = f
 	l.size = 0
+	l.ctime = l.createtime()
 	return nil
 }
 
