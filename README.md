@@ -32,13 +32,15 @@ To use lumberjack with the standard library's log package, just pass it into the
 Code:
 
 ```go
-log.SetOutput(&lumberjack.Logger{
-    Filename:   "/var/log/myapp/foo.log",
-    MaxSize:    500, // megabytes
-    MaxBackups: 3,
-    MaxAge:     28, //days
-    Compress:   true, // disabled by default
-})
+log.SetOutput(lumberjack.NewLogger(
+    "/var/log/myapp/foo.log",  // filename
+    "500",  //maxsize (megabytes)
+    "3",    //max back ups
+    "28",   //max age (days)
+    "5"     //time based rotation (minute)
+))
+
+
 ```
 
 
@@ -76,6 +78,8 @@ type Logger struct {
     // using gzip. The default is not to perform compression.
     Compress bool `json:"compress" yaml:"compress"`
     // contains filtered or unexported fields
+    // Duration should be rotateDuration * time.Minute
+	rotateDuration int64 
 }
 ```
 Logger is an io.WriteCloser that writes to the specified filename.
