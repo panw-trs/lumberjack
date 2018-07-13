@@ -114,6 +114,10 @@ type Logger struct {
 	millCh    chan bool
 	startMill sync.Once
 	maxfilesize int64
+	// Duration shoul be rotateDuration * time.Minute
+	rotateDuration int64
+	// time the logger created
+	ctime time.Time
 }
 
 var (
@@ -133,17 +137,24 @@ var (
 
 
 
-func NewLogger(filename string, maxsize int, maxbackups int, maxage int) *Logger {
+func NewLogger(filename string, maxsize int, maxbackups int, maxage int, rDuration int64) *Logger {
 	l := &Logger{
 		Filename:   filename,
 		MaxSize:    maxsize,
 		MaxBackups: maxbackups,
 		MaxAge:     maxage,
+		rotateDuration: rDuration,
+		
 		//Compress:   true, // disabled by default
 	}
 	l.maxfilesize = l.max()
+	l.ctime = time.Now()
+	
 	return l
 }
+
+
+
 // Write implements io.Writer.  If a write would cause the log file to be larger
 // than MaxSize, the file is closed, renamed to include a timestamp of the
 // current time, and a new log file is created using the original log file name.
@@ -167,13 +178,22 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 			return 0, err
 		}
 	}
-
+    
 	if l.size+writeLen > l.maxfilesize {
 		if err := l.rotate(); err != nil {
 			l.mu.Unlock()
 			return 0, err
 		}
 	}
+
+	if l.ctime.Add(time.Duration(l.rotateDuration) * time.Minute).Before(time.Now()) {
+		if err := l.rotate(); err != nil {
+			l.mu.Unlock()
+			return 0, err
+		}
+	}
+
+
 
 	n, err = l.file.Write(p)
 	l.size += int64(n)
@@ -259,6 +279,7 @@ func (l *Logger) openNew() error {
 	}
 	l.file = f
 	l.size = 0
+	l.ctime = time.Now()
 	return nil
 }
 
