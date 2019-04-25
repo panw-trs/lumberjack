@@ -114,7 +114,7 @@ type Logger struct {
 	millCh    chan bool
 	startMill sync.Once
 	maxfilesize int64
-	// Duration shoul be rotateDuration * time.Minute
+	// Duration shoul be rotateDuration * time.Second
 	rotateDuration int64
 	// time the logger created
 	ctime time.Time
@@ -186,7 +186,7 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	if l.ctime.Add(time.Duration(l.rotateDuration) * time.Minute).Before(time.Now()) {
+	if l.ctime.Add(time.Duration(l.rotateDuration) * time.Second).Before(time.Now()) {
 		if err := l.rotate(); err != nil {
 			l.mu.Unlock()
 			return 0, err

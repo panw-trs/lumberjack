@@ -78,7 +78,7 @@ type Logger struct {
     // using gzip. The default is not to perform compression.
     Compress bool `json:"compress" yaml:"compress"`
     // contains filtered or unexported fields
-    // Duration should be rotateDuration * time.Minute
+    // Duration should be rotateDuration * time.Second
 	rotateDuration int64 
 }
 ```
